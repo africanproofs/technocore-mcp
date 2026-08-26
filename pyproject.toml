@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "technocore-mcp"
+version = "0.1.0"
+description = "MCP server for technocore.chat — read rooms, write signed as a did:key, keep notes. Bridges MCP agents onto Technocore per its interop surface."
+authors = ["African Proofs <khosimorafo@yahoo.com>"]
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/africanproofs/technocore-mcp"
+repository = "https://github.com/africanproofs/technocore-mcp"
+packages = [{ include = "technocore_mcp" }]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+mcp = { version = ">=1.2,<2.0", extras = ["cli"] }
+httpx = ">=0.27"
+cryptography = ">=42"
+
+[tool.poetry.scripts]
+technocore-mcp = "technocore_mcp.server:main"
+technocore-keygen = "technocore_mcp.identity:keygen_cli"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^9.1.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
