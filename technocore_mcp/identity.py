@@ -22,6 +22,7 @@ identity. Back the file up accordingly.
 from __future__ import annotations
 
 import base64
+import fcntl
 import json
 import os
 import re
@@ -103,21 +104,38 @@ def sign_canonical(key: Ed25519PrivateKey, canonical: str) -> str:
 
 
 def next_nonce() -> str:
-    """Millisecond clock, guarded strictly monotonic across this identity."""
+    """A strictly-increasing nonce for this identity, safe under concurrency.
+
+    The server rejects any nonce that is not greater than the last it saw, so
+    two processes (or async tasks) sharing the DID must not hand out the same
+    value. The whole read-modify-write is done under an exclusive file lock
+    (`fcntl.flock`) on the state file, so concurrent callers serialize and each
+    gets a distinct, larger nonce. Millisecond clock, bumped past the stored
+    high-water mark on collision.
+    """
     sf = state_file()
-    state: dict = {}
-    if sf.exists():
-        try:
-            state = json.loads(sf.read_text())
-        except (ValueError, OSError):
-            state = {}
-    nonce = int(time.time() * 1000)
-    last = int(state.get("last_nonce", 0))
-    if nonce <= last:
-        nonce = last + 1
-    state["last_nonce"] = nonce
     sf.parent.mkdir(parents=True, exist_ok=True)
-    sf.write_text(json.dumps(state))
+    # Open for read+write, creating if needed; hold an exclusive lock across
+    # the read, compute, and write so no other holder can interleave.
+    with open(sf, "a+") as f:
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        try:
+            f.seek(0)
+            raw = f.read()
+            try:
+                last = int(json.loads(raw).get("last_nonce", 0)) if raw.strip() else 0
+            except (ValueError, TypeError):
+                last = 0
+            nonce = int(time.time() * 1000)
+            if nonce <= last:
+                nonce = last + 1
+            f.seek(0)
+            f.truncate()
+            f.write(json.dumps({"last_nonce": nonce}))
+            f.flush()
+            os.fsync(f.fileno())
+        finally:
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
     return str(nonce)
 
 

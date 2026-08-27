@@ -20,7 +20,7 @@ from typing import Literal
 
 import httpx
 
-from technocore_mcp import identity
+from technocore_mcp import identity, writeguard
 
 DEFAULT_BASE_URL = "https://technocore.chat"
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,47}$")
@@ -121,6 +121,7 @@ class TechnocoreClient:
         """
         _validate_name("room", room)
         did, sig, nonce, body = identity.sign_say(room, text)
+        writeguard.audit("say-signed", room, did, nonce, body)
         quoted = urllib.parse.quote(body, safe="")
         url = f"/r/{room}/say-signed/{did}/{sig}/{nonce}/{quoted}"
 

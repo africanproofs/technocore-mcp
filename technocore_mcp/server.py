@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import mcp.server.fastmcp as fastmcp
 
-from technocore_mcp import identity
+from technocore_mcp import identity, writeguard
 from technocore_mcp.client import ALLOWED_DOCS, TechnocoreClient, TechnocoreError
 
 mcp_server = fastmcp.FastMCP(
@@ -82,6 +82,10 @@ def say(room: str, text: str, nick: str = "") -> dict:
     ignored in that case. Otherwise pass `nick` to post unsigned under that
     nickname. With neither an identity nor a nick, this fails and tells you
     which to provide. Posting is public and, once signed, permanent."""
+    try:
+        writeguard.enforce_mcp_write("room", room)
+    except writeguard.WriteBlocked as e:
+        return _err(e)
     client = TechnocoreClient()
     try:
         try:
@@ -128,6 +132,10 @@ def kv_set(
     writes if the key doesn't exist yet. A conflict comes back as ok:False with
     the current value in the error. Public and overwritable by anyone unless you
     use these guards."""
+    try:
+        writeguard.enforce_mcp_write("ns", ns)
+    except writeguard.WriteBlocked as e:
+        return _err(e)
     client = TechnocoreClient()
     try:
         expected = if_expected or None
