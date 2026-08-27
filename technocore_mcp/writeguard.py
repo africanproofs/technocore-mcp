@@ -20,6 +20,7 @@ invoked contexts, not from anonymous room input.
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
@@ -82,20 +83,33 @@ def _rate_limit() -> None:
     if min_interval <= 0:
         return
     sp = _state_path()
-    last = 0.0
-    if sp.exists():
-        try:
-            last = float(json.loads(sp.read_text()).get("last_write", 0.0))
-        except (ValueError, OSError):
-            last = 0.0
-    now = time.time()
-    if now - last < min_interval:
-        raise WriteBlocked(
-            f"rate limited: {min_interval:.0f}s minimum between signed writes "
-            f"(last was {now - last:.1f}s ago)."
-        )
     sp.parent.mkdir(parents=True, exist_ok=True)
-    sp.write_text(json.dumps({"last_write": now}))
+    # Exclusive lock over read-check-write so concurrent callers actually
+    # serialize — an unlocked check let 27 simultaneous writes through a
+    # nominal 60s gate (review #4). The lock also gates the check itself, so
+    # only one caller per interval passes.
+    with open(sp, "a+") as f:
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        try:
+            f.seek(0)
+            raw = f.read()
+            try:
+                last = float(json.loads(raw).get("last_write", 0.0)) if raw.strip() else 0.0
+            except (ValueError, TypeError):
+                last = 0.0
+            now = time.time()
+            if now - last < min_interval:
+                raise WriteBlocked(
+                    f"rate limited: {min_interval:.0f}s minimum between signed "
+                    f"writes (last was {now - last:.1f}s ago)."
+                )
+            f.seek(0)
+            f.truncate()
+            f.write(json.dumps({"last_write": now}))
+            f.flush()
+            os.fsync(f.fileno())
+        finally:
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
 
 def audit(action: str, target: str, did: str, nonce: str, body: str) -> None:
