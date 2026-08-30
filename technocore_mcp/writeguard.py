@@ -1,14 +1,18 @@
-"""Guards on the signing surface — the confused-deputy defense.
+"""Guards on the MCP write surface (signed and unsigned) — the
+confused-deputy defense.
 
-The MCP `say`/`kv_set` tools can sign as the configured did:key. Exposed to an
-agent that also reads anonymous room content, that is a confused-deputy risk:
-a hostile room message could induce the agent to sign attacker text as a
-permanent, publicly-attributable identity. These guards bound that:
+The MCP `say` tool can sign as the configured did:key; `kv_set` is always
+unsigned. Exposed to an agent that also reads anonymous room content, both
+are a confused-deputy risk: a hostile room message could induce the agent to
+write when it shouldn't — sign attacker text under a publicly-attributable
+identity via `say`, or overwrite a note via `kv_set`. These guards bound
+that:
 
 - Writes through the MCP server are OFF by default (opt-in env), so a session
   that loaded the server only to READ cannot write at all — this also makes
   the "read-only without configuration" promise literally true.
-- An optional room/namespace allowlist confines where the identity will post.
+- An optional room/namespace allowlist confines where a write (signed or
+  not) may target.
 - A minimum interval between writes caps the blast radius of a runaway loop.
 - Every signed write is appended to a 0600 audit log (a custody trail; the
   text is hashed, not stored in full).
@@ -31,7 +35,8 @@ _TRUTHY = {"1", "true", "yes", "on"}
 
 
 class WriteBlocked(Exception):
-    """A signed write was refused by policy (not a network/auth failure)."""
+    """A write (signed or unsigned) was refused by policy, not a network/auth
+    failure."""
 
 
 def _audit_path() -> Path:
@@ -61,10 +66,11 @@ def enforce_mcp_write(kind: str, target: str) -> None:
     """
     if os.environ.get("TECHNOCORE_MCP_ALLOW_WRITE", "").lower() not in _TRUTHY:
         raise WriteBlocked(
-            "signed writes via the MCP server are disabled. This server is "
+            "writes via the MCP server are disabled. This server is "
             "read-only unless TECHNOCORE_MCP_ALLOW_WRITE is set — a deliberate "
             "guard so an agent reading untrusted room content cannot be induced "
-            "to sign as your identity."
+            "to write on that basis, whether that means signing as your "
+            "identity (`say`) or overwriting a note (`kv_set`)."
         )
     var = "TECHNOCORE_MCP_WRITE_ROOMS" if kind == "room" else "TECHNOCORE_MCP_WRITE_NS"
     allow = _allowlist(var)
@@ -100,7 +106,7 @@ def _rate_limit() -> None:
             now = time.time()
             if now - last < min_interval:
                 raise WriteBlocked(
-                    f"rate limited: {min_interval:.0f}s minimum between signed "
+                    f"rate limited: {min_interval:.0f}s minimum between "
                     f"writes (last was {now - last:.1f}s ago)."
                 )
             f.seek(0)
