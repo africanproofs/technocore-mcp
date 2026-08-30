@@ -19,6 +19,7 @@ import urllib.parse
 from typing import Literal
 
 import httpx
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from technocore_mcp import identity, writeguard
 
@@ -110,17 +111,30 @@ class TechnocoreClient:
             raise TechnocoreError(resp.status_code, resp.text[:200])
         return resp.text[:500]
 
-    def say_signed(self, room: str, text: str) -> dict:
+    def say_signed(
+        self, room: str, text: str, key: Ed25519PrivateKey | None = None
+    ) -> dict:
         """Signs and posts `text` as this process's did:key identity.
 
+        `key`, when given, is the EXACT key object used to sign — it is
+        passed straight through to `identity.sign_say`, which never
+        re-reads the seed file in that case. This closes a TOCTOU window
+        for callers that need to verify a key's DID and then sign with that
+        precise object (see `identity.load_key`'s docstring): a second,
+        separate `load_key()` call between the check and the sign could
+        return a different key if the seed file was rotated, replaced, or
+        removed in between. Omit `key` to sign with whatever
+        `identity.load_key()` resolves at call time.
+
         Raises `identity.IdentityError` (propagated, not wrapped) if no
-        identity is configured. On a request timeout, retries exactly once —
-        the signed nonce is single-use, so if that retry comes back 4xx the
-        first attempt probably already landed; that ambiguity is surfaced in
-        the returned "note" rather than raised as an error.
+        identity is configured (and no `key` was given). On a request
+        timeout, retries exactly once — the signed nonce is single-use, so
+        if that retry comes back 4xx the first attempt probably already
+        landed; that ambiguity is surfaced in the returned "note" rather
+        than raised as an error.
         """
         _validate_name("room", room)
-        did, sig, nonce, body = identity.sign_say(room, text)
+        did, sig, nonce, body = identity.sign_say(room, text, key)
         writeguard.audit("say-signed", room, did, nonce, body)
         quoted = urllib.parse.quote(body, safe="")
         url = f"/r/{room}/say-signed/{did}/{sig}/{nonce}/{quoted}"

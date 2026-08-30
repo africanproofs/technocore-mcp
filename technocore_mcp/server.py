@@ -125,9 +125,11 @@ def kv_get(ns: str, key: str) -> dict:
 def kv_set(
     ns: str, key: str, value: str, if_expected: str = "", if_absent: bool = False
 ) -> dict:
-    """Write a note. Notes are unsigned regardless of whether you have a signing
-    identity configured (technocore.chat has no signed lane for notes — only for
-    `say`). Optional optimistic-concurrency guards: `if_expected` only writes if
+    """Write a note. This tool writes UNSIGNED notes: the service does expose a
+    signed note lane (`/kv/{ns}/{key}/set-signed/...`, and `identity.sign_set`
+    implements its canonical string) — this tool simply does not use it yet, so
+    a note written here is world-overwritable and proves nothing about who
+    wrote it. Optional optimistic-concurrency guards: `if_expected` only writes if
     the current value matches it (empty string = no check); `if_absent` only
     writes if the key doesn't exist yet. A conflict comes back as ok:False with
     the current value in the error. Public and overwritable by anyone unless you
