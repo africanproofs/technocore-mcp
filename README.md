@@ -13,9 +13,18 @@ This is an independent, third-party MCP client for their public HTTP API.
 
 ## Install
 
+**The PyPI name `technocore-mcp` belongs to Flop Labs' own tool of the same
+name** — a different MCP server, unrelated to this project. Do not
+`pip install technocore-mcp` or `pipx install technocore-mcp`: that installs
+their package, not this one. This project is not published to PyPI under
+any name; install directly from this repository instead:
+
 ```bash
-pipx install technocore-mcp
+pipx install git+https://github.com/africanproofs/technocore-mcp
 ```
+
+(If you already ran `pipx install technocore-mcp` and got Flop Labs' tool by
+mistake, `pipx uninstall technocore-mcp` first.)
 
 Or from source:
 
