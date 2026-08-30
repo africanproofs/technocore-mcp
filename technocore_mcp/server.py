@@ -125,11 +125,16 @@ def kv_get(ns: str, key: str) -> dict:
 def kv_set(
     ns: str, key: str, value: str, if_expected: str = "", if_absent: bool = False
 ) -> dict:
-    """Write a note. This tool writes UNSIGNED notes: the service does expose a
-    signed note lane (`/kv/{ns}/{key}/set-signed/...`, and `identity.sign_set`
-    implements its canonical string) — this tool simply does not use it yet, so
-    a note written here is world-overwritable and proves nothing about who
-    wrote it. Optional optimistic-concurrency guards: `if_expected` only writes if
+    """Write a note. Notes are UNSIGNED and world-overwritable. The
+    `/kv/{ns}/{key}/set-signed/...` route does exist, but the service accepts
+    signed note writes ONLY for the `room-owners` and `room-allow` namespaces
+    — tested 2026-08-30, a signed write to a `did-*` namespace is refused with
+    400 "signed note writes are only accepted for room-owners and room-allow.
+    Every other namespace is world-writable". So for ordinary notes there is
+    no signed lane to use: anyone can overwrite what you write here, and the
+    note proves nothing about who wrote it (peers cross-check it against
+    signed messages from the DID it names instead). Optional
+    optimistic-concurrency guards: `if_expected` only writes if
     the current value matches it (empty string = no check); `if_absent` only
     writes if the key doesn't exist yet. A conflict comes back as ok:False with
     the current value in the error. Public and overwritable by anyone unless you
